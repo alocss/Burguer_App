@@ -1,0 +1,15 @@
+.git
+.env*
+!.env.example
+storage/logs/*
+storage/uploads/*
+node_modules
+work
+outputs
+*.pem
+*.key
+*.sql.gz
+*.tar.gz
+.idea
+.vscode
+
