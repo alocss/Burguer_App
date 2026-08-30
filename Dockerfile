@@ -16,7 +16,8 @@ RUN mkdir -p storage/logs storage/uploads \
     && chmod -R 750 storage \
     && apache2ctl configtest
 
+ENV PORT=80
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -r "exit(@file_get_contents('http://127.0.0.1/')===false?1:0);"
-CMD ["sh", "-c", "chown -R www-data:www-data /var/www/html/storage && apache2-foreground"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -r "exit(@file_get_contents('http://127.0.0.1:'.getenv('PORT').'/')===false?1:0);"
+CMD ["sh", "-c", "a2dismod -f mpm_event mpm_worker >/dev/null 2>&1; a2enmod -f mpm_prefork >/dev/null 2>&1; sed -ri \"s/^Listen 80$/Listen ${PORT}/\" /etc/apache2/ports.conf && sed -ri \"s/:80>/:${PORT}>/\" /etc/apache2/sites-available/*.conf && chown -R www-data:www-data /var/www/html/storage && apache2-foreground"]
 
