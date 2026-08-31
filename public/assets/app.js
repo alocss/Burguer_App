@@ -62,6 +62,49 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 (() => {
+  const toggle = document.querySelector('.nav-toggle');
+  const nav = document.getElementById('site-nav');
+  if (!toggle || !nav) return;
+  const close = () => {
+    nav.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+  toggle.addEventListener('click', () => {
+    const open = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', event => {
+    if (!nav.classList.contains('is-open')) return;
+    if (nav.contains(event.target) || toggle.contains(event.target)) return;
+    close();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (window.innerWidth > 680) close(); });
+})();
+
+(() => {
+  const toggle = document.querySelector('.sidebar-toggle');
+  const aside = document.getElementById('admin-sidebar');
+  if (!toggle || !aside) return;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'admin-backdrop';
+  document.body.appendChild(backdrop);
+  const close = () => {
+    aside.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+  toggle.addEventListener('click', () => {
+    const open = aside.classList.toggle('is-open');
+    backdrop.classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  backdrop.addEventListener('click', close);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (window.innerWidth > 680) close(); });
+})();
+
+(() => {
   const topbar = document.querySelector('.topbar');
   if (!topbar || document.querySelector('.coupon-strip')) return;
   const strip = document.createElement('aside');
