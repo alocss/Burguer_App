@@ -35,6 +35,14 @@ final class App
     private function home(): void
     {
         $products = $this->db->query('SELECT p.*, c.name category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.active=1 AND p.sold_out=0 ORDER BY p.featured DESC,p.id')->fetchAll();
+        $addonRows = $this->db->query('SELECT pag.product_id,g.id group_id,g.name group_name,g.min_choices,g.max_choices,g.required,a.id addon_id,a.name addon_name,a.price_cents FROM product_addon_groups pag JOIN addon_groups g ON g.id=pag.group_id AND g.active=1 JOIN addons a ON a.group_id=g.id AND a.active=1 ORDER BY pag.product_id,g.id,a.id')->fetchAll();
+        $productAddons = [];
+        foreach ($addonRows as $addon) {
+            $productId = (int)$addon['product_id'];
+            $groupId = (int)$addon['group_id'];
+            $productAddons[$productId][$groupId]['group'] = $addon;
+            $productAddons[$productId][$groupId]['options'][] = $addon;
+        }
         $groups = [];
         foreach ($products as $product) $groups[$product['category']][] = $product;
         ob_start(); ?>
@@ -43,7 +51,10 @@ final class App
         <nav class="categories" aria-label="Categorias"><b>ESCOLHA SUA FOME</b><a class="active" href="#cardapio">Todos</a><?php foreach(array_keys($groups) as $category):?><a href="#<?=Security::e($this->slug($category))?>"><?=Security::e($category)?></a><?php endforeach;?></nav>
         <section class="catalog" id="cardapio"><span class="eyebrow">NOSSO CARDÁPIO</span><h2>Feitos para marcar.</h2>
         <?php foreach ($groups as $category => $items): ?><div class="product-row" id="<?=Security::e($this->slug($category))?>"><header><h3><?=Security::e(mb_strtoupper($category))?></h3><span>← &nbsp; →</span></header><div class="products">
-        <?php foreach ($items as $p): ?><article class="product"><img src="<?=Security::e($p['image_path'])?>" alt="<?=Security::e($p['name'])?>"><div><small><?=Security::e($p['category'])?></small><h3><?=Security::e($p['name'])?></h3><p><?=Security::e($p['description'])?></p><footer><strong><?=self::money((int)$p['price_cents'])?></strong><form method="post" action="/cart"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>"><button class="primary" type="submit">Adicionar</button></form></footer></div></article><?php endforeach; ?>
+        <?php foreach ($items as $p): $dialogId='customize-'.(int)$p['id']; ?><article class="product"><img src="<?=Security::e($p['image_path'])?>" alt="<?=Security::e($p['name'])?>"><div><small><?=Security::e($p['category'])?></small><h3><?=Security::e($p['name'])?></h3><p><?=Security::e($p['description'])?></p><footer><strong><?=self::money((int)$p['price_cents'])?></strong><button class="primary customize-trigger" type="button" data-dialog="<?=$dialogId?>" aria-haspopup="dialog">Adicionar</button></footer></div></article>
+        <dialog class="customize-dialog" id="<?=$dialogId?>" aria-labelledby="<?=$dialogId?>-title"><div class="customize-shell"><div class="customize-visual"><img src="<?=Security::e($p['image_path'])?>" alt=""></div><form class="customize-form" method="post" action="/cart" data-base-price="<?=(int)$p['price_cents']?>"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><input type="hidden" name="product_id" value="<?=(int)$p['id']?>"><header><div><span class="eyebrow"><?=Security::e(mb_strtoupper($p['category']))?></span><h2 id="<?=$dialogId?>-title"><?=Security::e($p['name'])?></h2><p><?=Security::e($p['description'])?></p></div><button class="dialog-close" type="button" aria-label="Fechar personalização">×</button></header><div class="customize-scroll">
+        <?php foreach($productAddons[(int)$p['id']]??[] as $addonGroup): $group=$addonGroup['group']; ?><fieldset data-max-choices="<?=(int)$group['max_choices']?>"><legend><span><?=Security::e($group['group_name'])?></span><small><?=(int)$group['min_choices']>0?'Escolha ao menos '.(int)$group['min_choices']:'Opcional'?></small></legend><?php foreach($addonGroup['options'] as $option):?><label class="addon-option"><input type="checkbox" name="addon_ids[]" value="<?=(int)$option['addon_id']?>" data-price="<?=(int)$option['price_cents']?>"><span><?=Security::e($option['addon_name'])?></span><b><?=((int)$option['price_cents'])>0?'+ '.self::money((int)$option['price_cents']):'Grátis'?></b></label><?php endforeach;?></fieldset><?php endforeach;?>
+        <label class="notes-field">Observação<textarea name="notes" maxlength="300" rows="3" placeholder="Ex.: ponto da carne, molho separado"></textarea><small><span>0</span>/300</small></label></div><footer class="customize-actions"><div class="quantity-control" aria-label="Quantidade"><button type="button" data-quantity="minus" aria-label="Diminuir quantidade">−</button><output>1</output><input type="hidden" name="quantity" value="1"><button type="button" data-quantity="plus" aria-label="Aumentar quantidade">+</button></div><button class="primary add-customized" type="submit"><span>Adicionar</span><strong><?=self::money((int)$p['price_cents'])?></strong></button></footer></form></div></dialog><?php endforeach; ?>
         </div></div><?php endforeach; ?></section>
         <section class="home-promo" id="promocoes"><div><span class="eyebrow">PROMOÇÃO DA CASA</span><h2>Mais sabor. Melhor junto.</h2><p>Escolha seu burger favorito, complete com batata e bebida e transforme a noite.</p><a class="primary" href="#combos">Ver os combos</a></div><img src="/assets/combo.jpg" alt="Combo Burguer App"></section>
         <section class="delivery-info" id="duvidas"><span class="eyebrow">CHEGAMOS ATÉ VOCÊ</span><h2>Da nossa brasa para sua casa.</h2><div><article><b>01</b><h3>Onde entregamos</h3><p>Simões, Paripe e Areia Branca. Taxa calculada no checkout.</p></article><article><b>02</b><h3>Como pagar</h3><p>Pix, dinheiro, débito ou crédito na entrega e retirada.</p></article><article><b>03</b><h3>Retire sem taxa</h3><p>Rua das Brasas, 147 — Centro. Seu pedido pronto e quentinho.</p></article></div></section>
@@ -55,17 +66,33 @@ final class App
     private function cartAdd(): never
     {
         $id = filter_input(INPUT_POST, 'product_id', FILTER_VALIDATE_INT);
+        $quantity = max(1, min(10, (int)($_POST['quantity'] ?? 1)));
+        $notes = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 300);
+        $addonIds = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['addon_ids'] ?? [])), fn(int $value): bool => $value > 0)));
         $stmt = $this->db->prepare('SELECT id FROM products WHERE id=:id AND active=1 AND sold_out=0');
         $stmt->execute(['id'=>$id]);
         if (!$stmt->fetch()) $this->flash('Produto indisponível.', 'error', '/');
-        $_SESSION['cart'][$id] = min(10, (int)($_SESSION['cart'][$id] ?? 0) + 1);
+        $groups = $this->productAddonGroups((int)$id);
+        $selectedByGroup = [];
+        foreach ($addonIds as $addonId) {
+            if (!isset($groups['options'][$addonId])) $this->flash('Uma personalização selecionada não está disponível.', 'error', '/#cardapio');
+            $selectedByGroup[$groups['options'][$addonId]['group_id']][] = $addonId;
+        }
+        foreach ($groups['groups'] as $groupId => $group) {
+            $count = count($selectedByGroup[$groupId] ?? []);
+            if ($count < (int)$group['min_choices'] || $count > (int)$group['max_choices']) $this->flash('Revise as opções de '.$group['name'].'.', 'error', '/#cardapio');
+        }
+        sort($addonIds);
+        $lineKey = hash('sha256', (int)$id.'|'.implode(',', $addonIds).'|'.$notes);
+        $existing = $_SESSION['cart'][$lineKey]['quantity'] ?? 0;
+        $_SESSION['cart'][$lineKey] = ['product_id'=>(int)$id,'quantity'=>min(10,(int)$existing+$quantity),'addon_ids'=>$addonIds,'notes'=>$notes];
         $this->flash('Produto adicionado à sacola.', 'success', '/#cardapio');
     }
 
     private function cartRemove(): never
     {
-        $id = filter_input(INPUT_POST, 'product_id', FILTER_VALIDATE_INT);
-        unset($_SESSION['cart'][$id]);
+        $lineKey = preg_replace('/[^a-f0-9]/', '', (string)($_POST['line_key'] ?? ''));
+        if (strlen($lineKey) === 64) unset($_SESSION['cart'][$lineKey]);
         $this->flash('Item removido.', 'success', '/checkout');
     }
 
@@ -78,7 +105,7 @@ final class App
         ob_start(); ?>
         <section class="checkout"><span class="eyebrow">CHECKOUT SEGURO</span><h1>Finalize seu pedido</h1>
         <?php if (!$items): ?><p>Sua sacola está vazia.</p><a class="primary" href="/">Ver cardápio</a><?php else: ?>
-        <div class="checkout-grid"><div><?php foreach($items as $item): ?><article class="cart-row"><img src="<?=Security::e($item['image_path'])?>"><div><b><?=Security::e($item['name'])?></b><span><?= (int)$item['quantity']?> × <?=self::money((int)$item['price_cents'])?></span></div><strong><?=self::money((int)$item['line_total'])?></strong><form method="post" action="/cart/remove"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><input type="hidden" name="product_id" value="<?= (int)$item['id']?>"><button>Remover</button></form></article><?php endforeach; ?></div>
+        <div class="checkout-grid"><div><?php foreach($items as $item): ?><article class="cart-row"><img src="<?=Security::e($item['image_path'])?>" alt=""><div><b><?=Security::e($item['name'])?></b><span><?= (int)$item['quantity']?> × <?=self::money((int)$item['price_cents'])?></span><?php if($item['addons']):?><small><?=Security::e(implode(' • ',array_column($item['addons'],'name')))?></small><?php endif;?><?php if($item['notes']!==''):?><small>Observação: <?=Security::e($item['notes'])?></small><?php endif;?></div><strong><?=self::money((int)$item['line_total'])?></strong><form method="post" action="/cart/remove"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><input type="hidden" name="line_key" value="<?=Security::e($item['line_key'])?>"><button>Remover</button></form></article><?php endforeach; ?></div>
         <form class="order-form" method="post" action="/checkout"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><input type="hidden" name="idempotency_key" value="<?=Security::e(hash('sha256',session_id().'|'.implode(',',array_keys($_SESSION['cart'] ?? [])).'|'.$subtotal))?>"><label>Recebimento<select name="fulfillment" id="fulfillment"><option value="delivery">Entrega</option><option value="pickup">Retirada grátis</option></select></label><label>Bairro<select name="area_id"><?php foreach($areas as $a):?><option value="<?=(int)$a['id']?>"><?=Security::e($a['name'])?> — <?=self::money((int)$a['fee_cents'])?></option><?php endforeach;?></select></label><label>Rua<input name="street" maxlength="160" required></label><label>Número<input name="number" maxlength="30" required></label><label>Referência<input name="reference" maxlength="160"></label><label>Cupom<input name="coupon" maxlength="40"></label><label>Pagamento<select name="payment_method"><option value="pix_delivery">Pix na entrega</option><option value="cash">Dinheiro</option><option value="debit_delivery">Débito na entrega</option><option value="credit_delivery">Crédito na entrega</option></select></label><p>Subtotal <strong><?=self::money($subtotal)?></strong></p><button class="primary" type="submit">Confirmar pedido</button></form></div><?php endif; ?></section><?php
         $this->layout('Finalizar pedido', ob_get_clean());
     }
@@ -104,7 +131,15 @@ final class App
         $orderId=Database::transaction(function(PDO $db)use($items,$subtotal,$discount,$fee,$total,$key,$number,$user,$fulfillment,$payment,$area,&$addressId){
             if($fulfillment==='delivery'){$s=$db->prepare('INSERT INTO addresses(user_id,delivery_area_id,street,number,reference)VALUES(:u,:a,:s,:n,:r)');$s->execute(['u'=>$user['id'],'a'=>$area['id'],'s'=>mb_substr(trim($_POST['street']),0,160),'n'=>mb_substr(trim($_POST['number']),0,30),'r'=>mb_substr(trim($_POST['reference']??''),0,160)]);$addressId=(int)$db->lastInsertId();}
             $s=$db->prepare('INSERT INTO orders(public_number,idempotency_key,user_id,address_id,fulfillment,payment_method,payment_status,subtotal_cents,discount_cents,delivery_fee_cents,total_cents)VALUES(:num,:key,:u,:addr,:f,:pm,\'pending\',:sub,:disc,:fee,:total)');$s->execute(['num'=>$number,'key'=>$key,'u'=>$user['id'],'addr'=>$addressId,'f'=>$fulfillment,'pm'=>$payment,'sub'=>$subtotal,'disc'=>$discount,'fee'=>$fee,'total'=>$total]);$oid=(int)$db->lastInsertId();
-            $si=$db->prepare('INSERT INTO order_items(order_id,product_id,product_name,unit_price_cents,quantity,total_cents)VALUES(:o,:p,:n,:unit,:q,:total)');foreach($items as$i)$si->execute(['o'=>$oid,'p'=>$i['id'],'n'=>$i['name'],'unit'=>$i['price_cents'],'q'=>$i['quantity'],'total'=>$i['line_total']]);
+            $si=$db->prepare('INSERT INTO order_items(order_id,product_id,product_name,unit_price_cents,quantity,total_cents)VALUES(:o,:p,:n,:unit,:q,:total)');
+            $sa=$db->prepare('INSERT INTO order_item_addons(order_item_id,addon_id,addon_name,unit_price_cents,quantity,total_cents)VALUES(:item,:addon,:name,:price,:quantity,:total)');
+            $sc=$db->prepare('INSERT INTO order_item_customizations(order_item_id,notes)VALUES(:item,:notes)');
+            foreach($items as$i){
+                $si->execute(['o'=>$oid,'p'=>$i['id'],'n'=>$i['name'],'unit'=>$i['price_cents'],'q'=>$i['quantity'],'total'=>$i['line_total']]);
+                $orderItemId=(int)$db->lastInsertId();
+                foreach($i['addons'] as$addon)$sa->execute(['item'=>$orderItemId,'addon'=>$addon['id'],'name'=>$addon['name'],'price'=>$addon['price_cents'],'quantity'=>$i['quantity'],'total'=>(int)$addon['price_cents']*(int)$i['quantity']]);
+                if($i['notes']!=='')$sc->execute(['item'=>$orderItemId,'notes'=>$i['notes']]);
+            }
             $db->prepare('INSERT INTO order_status_history(order_id,actor_id,new_status)VALUES(:o,:u,\'received\')')->execute(['o'=>$oid,'u'=>$user['id']]);return $oid;
         });
         $_SESSION['cart']=[];unset($_SESSION['checkout_nonce']);session_regenerate_id(true);Auth::redirect('/pedido/'.$number);
@@ -135,7 +170,43 @@ final class App
 
     private function cartData(): array
     {
-        $cart=$_SESSION['cart']??[];if(!$cart)return[[],0];$ids=array_values(array_filter(array_map('intval',array_keys($cart))));$marks=implode(',',array_fill(0,count($ids),'?'));$s=$this->db->prepare("SELECT id,name,price_cents,image_path FROM products WHERE active=1 AND sold_out=0 AND id IN ($marks)");$s->execute($ids);$items=[];$subtotal=0;foreach($s->fetchAll()as$p){$q=max(1,min(10,(int)$cart[$p['id']]));$p['quantity']=$q;$p['line_total']=(int)$p['price_cents']*$q;$subtotal+=$p['line_total'];$items[]=$p;}return[$items,$subtotal];
+        $cart=$_SESSION['cart']??[];
+        if(!$cart)return[[],0];
+        $normalized=[];
+        foreach($cart as$key=>$line){
+            if(is_array($line)){
+                $productId=(int)($line['product_id']??0);
+                $lineKey=preg_match('/^[a-f0-9]{64}$/',(string)$key)?(string)$key:hash('sha256',$productId.'|legacy|'.$key);
+                $normalized[$lineKey]=['product_id'=>$productId,'quantity'=>max(1,min(10,(int)($line['quantity']??1))),'addon_ids'=>array_values(array_unique(array_map('intval',(array)($line['addon_ids']??[])))),'notes'=>mb_substr(trim((string)($line['notes']??'')),0,300)];
+            }else{
+                $productId=(int)$key;
+                $lineKey=hash('sha256',$productId.'||');
+                $normalized[$lineKey]=['product_id'=>$productId,'quantity'=>max(1,min(10,(int)$line)),'addon_ids'=>[],'notes'=>''];
+            }
+        }
+        $ids=array_values(array_unique(array_filter(array_column($normalized,'product_id'))));
+        if(!$ids)return[[],0];
+        $marks=implode(',',array_fill(0,count($ids),'?'));
+        $s=$this->db->prepare("SELECT id,name,price_cents,image_path FROM products WHERE active=1 AND sold_out=0 AND id IN ($marks)");
+        $s->execute($ids);
+        $products=[];foreach($s->fetchAll()as$product)$products[(int)$product['id']]=$product;
+        $items=[];$subtotal=0;
+        foreach($normalized as$lineKey=>$line){
+            if(!isset($products[$line['product_id']]))continue;
+            $p=$products[$line['product_id']];$allowed=$this->productAddonGroups((int)$p['id']);$addons=[];$addonTotal=0;
+            foreach($line['addon_ids']as$addonId){if(isset($allowed['options'][$addonId])){$addon=$allowed['options'][$addonId];$addons[]=['id'=>(int)$addon['id'],'name'=>$addon['name'],'price_cents'=>(int)$addon['price_cents']];$addonTotal+=(int)$addon['price_cents'];}}
+            $p['line_key']=$lineKey;$p['quantity']=$line['quantity'];$p['notes']=$line['notes'];$p['addons']=$addons;$p['base_price_cents']=(int)$p['price_cents'];$p['price_cents']=(int)$p['price_cents']+$addonTotal;$p['line_total']=(int)$p['price_cents']*(int)$p['quantity'];$subtotal+=$p['line_total'];$items[]=$p;
+        }
+        $_SESSION['cart']=$normalized;
+        return[$items,$subtotal];
+    }
+
+    private function productAddonGroups(int $productId): array
+    {
+        $stmt=$this->db->prepare('SELECT g.id group_id,g.name group_name,g.min_choices,g.max_choices,a.id addon_id,a.name addon_name,a.price_cents FROM product_addon_groups pag JOIN addon_groups g ON g.id=pag.group_id AND g.active=1 JOIN addons a ON a.group_id=g.id AND a.active=1 WHERE pag.product_id=:product ORDER BY g.id,a.id');
+        $stmt->execute(['product'=>$productId]);$groups=[];$options=[];
+        foreach($stmt->fetchAll()as$row){$groupId=(int)$row['group_id'];$groups[$groupId]=['name'=>$row['group_name'],'min_choices'=>(int)$row['min_choices'],'max_choices'=>(int)$row['max_choices']];$options[(int)$row['addon_id']]=['id'=>(int)$row['addon_id'],'group_id'=>$groupId,'name'=>$row['addon_name'],'price_cents'=>(int)$row['price_cents']];}
+        return['groups'=>$groups,'options'=>$options];
     }
 
     private function admin(): void
@@ -159,7 +230,27 @@ final class App
     private function adminAction(): never
     {
         Auth::requireAdmin();$action=$_POST['action']??'';
-        if($action==='order_status'){$status=$_POST['status']??'';$id=(int)($_POST['id']??0);Database::transaction(function(PDO$db)use($id,$status){$s=$db->prepare('SELECT status FROM orders WHERE id=:id FOR UPDATE');$s->execute(['id'=>$id]);$old=$s->fetchColumn();if(!$old)throw new \DomainException('Pedido inexistente');$flow=['received'=>['confirmed','rejected','cancelled'],'confirmed'=>['preparing','cancelled'],'preparing'=>['out_for_delivery','cancelled'],'out_for_delivery'=>['delivered','cancelled'],'delivered'=>[],'cancelled'=>[],'rejected'=>[]];if(!in_array($status,$flow[$old]??[],true))throw new \DomainException('Transição de status não permitida');$db->prepare('UPDATE orders SET status=:s WHERE id=:id AND status=:old')->execute(['s'=>$status,'id'=>$id,'old'=>$old]);$db->prepare('INSERT INTO order_status_history(order_id,actor_id,old_status,new_status)VALUES(:o,:a,:old,:new)')->execute(['o'=>$id,'a'=>Auth::user()['id'],'old'=>$old,'new'=>$status]);});$this->audit('order.status','order',(string)$id,['status'=>$status]);$this->flash('Status atualizado.','success','/admin?page=orders');}
+        if($action==='order_status'){
+            $status=$_POST['status']??'';$id=(int)($_POST['id']??0);
+            $isKanban=strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH']??'','XMLHttpRequest')===0;
+            try {
+                Database::transaction(function(PDO$db)use($id,$status){
+                    $s=$db->prepare('SELECT status FROM orders WHERE id=:id FOR UPDATE');$s->execute(['id'=>$id]);$old=$s->fetchColumn();
+                    if(!$old)throw new \DomainException('Pedido inexistente');
+                    $flow=['received'=>['confirmed','rejected','cancelled'],'confirmed'=>['preparing','cancelled'],'preparing'=>['out_for_delivery','cancelled'],'out_for_delivery'=>['delivered','cancelled'],'delivered'=>[],'cancelled'=>[],'rejected'=>[]];
+                    if(!in_array($status,$flow[$old]??[],true))throw new \DomainException('Transição de status não permitida');
+                    $update=$db->prepare('UPDATE orders SET status=:s WHERE id=:id AND status=:old');$update->execute(['s'=>$status,'id'=>$id,'old'=>$old]);
+                    if($update->rowCount()!==1)throw new \DomainException('O pedido foi atualizado por outro usuário');
+                    $db->prepare('INSERT INTO order_status_history(order_id,actor_id,old_status,new_status)VALUES(:o,:a,:old,:new)')->execute(['o'=>$id,'a'=>Auth::user()['id'],'old'=>$old,'new'=>$status]);
+                });
+                $this->audit('order.status','order',(string)$id,['status'=>$status]);
+                if($isKanban){header('Content-Type: application/json; charset=utf-8');echo json_encode(['ok'=>true,'status'=>$status],JSON_THROW_ON_ERROR);exit;}
+                $this->flash('Status atualizado.','success','/admin?page=orders');
+            } catch(\DomainException $e) {
+                if($isKanban){http_response_code(422);header('Content-Type: application/json; charset=utf-8');echo json_encode(['ok'=>false,'message'=>$e->getMessage()],JSON_THROW_ON_ERROR);exit;}
+                $this->flash($e->getMessage(),'error','/admin?page=orders');
+            }
+        }
         if($action==='product_toggle'){$id=(int)($_POST['id']??0);$this->db->prepare('UPDATE products SET active=NOT active WHERE id=:id')->execute(['id'=>$id]);$this->audit('product.toggle','product',(string)$id,[]);$this->flash('Produto atualizado.','success','/admin?page=products');}
         if($action==='product_create'){$name=trim($_POST['name']??'');$description=trim($_POST['description']??'');$price=(int)($_POST['price_cents']??0);$category=(int)($_POST['category_id']??0);if($name===''||$description===''||$price<1)$this->flash('Preencha os dados do produto.','error','/admin?page=products');$image=$this->secureImageUpload($_FILES['image']??null)??'/assets/house-bacon.jpg';$slug=$this->slug($name).'-'.substr(bin2hex(random_bytes(3)),0,6);$s=$this->db->prepare('INSERT INTO products(category_id,name,slug,description,price_cents,image_path)VALUES(:c,:n,:slug,:d,:p,:img)');$s->execute(['c'=>$category,'n'=>mb_substr($name,0,140),'slug'=>$slug,'d'=>mb_substr($description,0,500),'p'=>$price,'img'=>$image]);$this->audit('product.create','product',$this->db->lastInsertId(),[]);$this->flash('Produto cadastrado.','success','/admin?page=products');}
         if($action==='category_create'){$name=trim($_POST['name']??'');if($name==='')$this->flash('Informe o nome.','error','/admin?page=categories');$s=$this->db->prepare('INSERT INTO categories(name,slug,sort_order)VALUES(:n,:slug,:sort)');$s->execute(['n'=>mb_substr($name,0,100),'slug'=>$this->slug($name).'-'.substr(bin2hex(random_bytes(2)),0,4),'sort'=>(int)($_POST['sort_order']??0)]);$this->flash('Categoria criada.','success','/admin?page=categories');}
@@ -185,7 +276,7 @@ final class App
 
     private function audit(string $action,string $entity,?string $id,array $metadata):void{$ip=$_SERVER['REMOTE_ADDR']??'';$hash=hash_hmac('sha256',$ip,Config::get('APP_KEY','local-development-key'));$s=$this->db->prepare('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id,metadata_json,ip_hash)VALUES(:a,:action,:e,:id,:m,:ip)');$s->execute(['a'=>Auth::user()['id']??null,'action'=>$action,'e'=>$entity,'id'=>$id,'m'=>json_encode($metadata,JSON_THROW_ON_ERROR),'ip'=>$hash]);}
 
-    private function layout(string $title,string $content,bool $admin=false):void{$flash=$_SESSION['flash']??null;unset($_SESSION['flash']);$cartCount=array_sum($_SESSION['cart']??[]);$whatsapp=preg_replace('/\D/','',Config::get('WHATSAPP_NUMBER',''));?><!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=Security::e($title)?></title><link rel="stylesheet" href="/assets/app.css"></head><body class="<?=$admin?'admin-body':''?>"><?php if(!$admin):?><header class="topbar"><a href="/" class="brand"><img src="/assets/logo-burguer-app.jpg"><b>BURGUER APP</b></a><nav><a href="/">Início</a><a href="/#cardapio">Cardápio</a><a href="/#promocoes">Promoções</a><a href="/#duvidas">Dúvidas</a><a class="cart-link" href="/checkout" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8.5h11l1.2 11H5.3l1.2-11Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg><span>Sacola (<?=$cartCount?>)</span></a><?php if(Auth::check()):?><form method="post" action="/logout"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><button>Sair</button></form><?php else:?><a href="/login">Entrar</a><?php endif;?></nav></header><?php endif;?><?php if($flash):?><div class="toast <?=Security::e($flash['type'])?>"><?=Security::e($flash['message'])?></div><?php endif;?><?=$content?><?php if(!$admin && $whatsapp!==''):?><a class="whatsapp" href="https://wa.me/<?=Security::e($whatsapp)?>" rel="noopener noreferrer" target="_blank"><img src="/assets/whatsapp.svg" alt=""><span>Fale com a Burguer</span></a><?php endif;?><script src="/assets/app.js" defer></script></body></html><?php }
+    private function layout(string $title,string $content,bool $admin=false):void{$flash=$_SESSION['flash']??null;unset($_SESSION['flash']);$cartCount=0;foreach(($_SESSION['cart']??[])as$line)$cartCount+=is_array($line)?(int)($line['quantity']??0):(int)$line;$whatsapp=preg_replace('/\D/','',Config::get('WHATSAPP_NUMBER',''));?><!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=Security::e($title)?></title><link rel="stylesheet" href="/assets/app.css"></head><body class="<?=$admin?'admin-body':''?>"><?php if(!$admin):?><header class="topbar"><a href="/" class="brand"><img src="/assets/logo-burguer-app.jpg"><b>BURGUER APP</b></a><nav><a href="/">Início</a><a href="/#cardapio">Cardápio</a><a href="/#promocoes">Promoções</a><a href="/#duvidas">Dúvidas</a><a class="cart-link" href="/checkout" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8.5h11l1.2 11H5.3l1.2-11Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg><span>Sacola (<?=$cartCount?>)</span></a><?php if(Auth::check()):?><form method="post" action="/logout"><input type="hidden" name="_csrf" value="<?=Security::e(Security::csrf())?>"><button>Sair</button></form><?php else:?><a href="/login">Entrar</a><?php endif;?></nav></header><?php endif;?><?php if($flash):?><div class="toast <?=Security::e($flash['type'])?>"><?=Security::e($flash['message'])?></div><?php endif;?><?=$content?><?php if(!$admin && $whatsapp!==''):?><a class="whatsapp" href="https://wa.me/<?=Security::e($whatsapp)?>" rel="noopener noreferrer" target="_blank"><img src="/assets/whatsapp.svg" alt=""><span>Fale com a Burguer</span></a><?php endif;?><script src="/assets/app.js" defer></script></body></html><?php }
     private function flash(string $message,string $type,string $path):never{$_SESSION['flash']=['message'=>$message,'type'=>$type];Auth::redirect($path);}
     private static function money(int $cents):string{return 'R$ '.number_format($cents/100,2,',','.');}
     private static function statusLabel(string $s):string{return ['received'=>'Recebido','confirmed'=>'Confirmado','preparing'=>'Em preparação','out_for_delivery'=>'Saiu para entrega','delivered'=>'Entregue','cancelled'=>'Cancelado','rejected'=>'Recusado'][$s]??$s;}

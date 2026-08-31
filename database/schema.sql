@@ -143,6 +143,24 @@ CREATE TABLE IF NOT EXISTS order_items (
   FOREIGN KEY(product_id) REFERENCES products(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS order_item_addons (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_item_id BIGINT UNSIGNED NOT NULL,
+  addon_id BIGINT UNSIGNED NOT NULL,
+  addon_name VARCHAR(120) NOT NULL,
+  unit_price_cents INT UNSIGNED NOT NULL DEFAULT 0,
+  quantity SMALLINT UNSIGNED NOT NULL,
+  total_cents INT UNSIGNED NOT NULL DEFAULT 0,
+  FOREIGN KEY(order_item_id) REFERENCES order_items(id) ON DELETE CASCADE,
+  FOREIGN KEY(addon_id) REFERENCES addons(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS order_item_customizations (
+  order_item_id BIGINT UNSIGNED PRIMARY KEY,
+  notes VARCHAR(300) NOT NULL,
+  FOREIGN KEY(order_item_id) REFERENCES order_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS order_status_history (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   order_id BIGINT UNSIGNED NOT NULL,
@@ -192,6 +210,24 @@ INSERT IGNORE INTO products (id,category_id,name,slug,description,price_cents,im
 (7,6,'Brownie na Brasa','brownie-na-brasa','Brownie, sorvete de baunilha e calda de chocolate.',2190,'/assets/dessert.jpg',0),
 (8,5,'Coca-Cola 350ml','coca-cola-350','Lata bem gelada, tradicional ou zero.',790,'/assets/refrigerante.jpg',0),
 (9,4,'Onion Rings','onion-rings','Anéis de cebola empanados, crocantes e acompanhados de molho da casa.',2290,'/assets/onion-rings.jpg',0);
+
+INSERT IGNORE INTO addon_groups (id,name,min_choices,max_choices,required,active) VALUES
+(1001,'Adicione à sua brasa',0,3,0,1),
+(1002,'Quer tirar algo?',0,6,0,1);
+
+INSERT IGNORE INTO addons (id,group_id,name,price_cents,active) VALUES
+(1001,1001,'Bacon extra',550,1),
+(1002,1001,'Cheddar extra',450,1),
+(1003,1001,'Carne smash 100g',990,1),
+(1004,1002,'Sem pão brioche',0,1),
+(1005,1002,'Sem cheddar',0,1),
+(1006,1002,'Sem bacon',0,1),
+(1007,1002,'Sem cebola caramelizada',0,1),
+(1008,1002,'Sem molho da casa',0,1),
+(1009,1002,'Sem salada',0,1);
+
+INSERT IGNORE INTO product_addon_groups (product_id,group_id) VALUES
+(1,1001),(1,1002),(2,1001),(2,1002),(3,1001),(3,1002),(4,1001),(4,1002),(6,1001),(6,1002);
 
 INSERT IGNORE INTO delivery_areas (id,name,fee_cents,min_order_cents,eta_minutes) VALUES
 (1,'Centro',690,2000,40),(2,'Paripe',1290,2500,50),(3,'Areia Branca',1390,2500,55);
